@@ -2,6 +2,8 @@ import torch.nn as nn
 import torch
 import numpy as np
 from utils import ConvBlock, BasicBlock, Bottleneck
+from anchors import RPN
+from losses import FocalLoss
 
 import sys, os
 
@@ -9,7 +11,7 @@ import sys, os
 def layers_dim(h_x, w_x, factor, n_layers):
     h = []
     w = []
-    for i in range(n_layers - 1):
+    for i in range(n_layers):
         h.append(h_x)
         w.append(w_x)
         h_x /= float(factor)
@@ -21,6 +23,9 @@ def layers_dim(h_x, w_x, factor, n_layers):
 class FPN(nn.Module):
     """ 
     Computes features throughout varying levels of the network.
+    Contains adjustments as per RetinaNet paper; a) P6 obtained
+    via 3x3 stride 2 convolution on C5; b) P7 computed by applying
+    ReLU followed by a 3x3 stride 2 convolution on P6.
     
     Input:
         - features : list of output features at each level of the forward pass in decreasing order (C5, C4, etc.)
@@ -34,21 +39,27 @@ class FPN(nn.Module):
     """
     
     # We use constant output features, although we can use each of the channels to preserve lenght & scales
-    def __init__(self, features, dimensions, max_plane, feature_size=256):
+    def __init__(self, features, dimensions, feature_size=256):
         super(FPN, self).__init__()
-        
         assert len(features) == len(dimensions), "Lateral connections do not match top-to-bottom connections."
         
         self.feature_size = feature_size
+        # 
         self.n_layers = len(features)
         
-        # Input Re-scaling
-        self.lvl_conv = nn.Conv2d(max_plane, feature_size, kernel_size=1, stride=1, padding=0)
-        
+
         # Operations
         self.conv1 = self._make_conv(features, kernel=1, stride=1, padding=0)
         self.upsampler = self._make_upsampler(dimensions)
         self.conv2 = self._make_conv([feature_size] * self.n_layers, kernel=3, stride=1, padding=1)
+        
+        # Operations P6 & P7
+        self.p6 = nn.Conv2d(features[-1], feature_size, kernel_size=3, stride=2, padding=1)
+        self.p7 = nn.Sequential(
+            nn.ReLU(),
+            nn.Conv2d(feature_size, feature_size, kernel_size=3, stride=2, padding=1)
+        )
+        
         
         
     def _make_conv(self, features, kernel, stride, padding):
@@ -63,7 +74,7 @@ class FPN(nn.Module):
     def _make_upsampler(self, dimensions):
         """ Creates upsampler modules for each level."""
         layer = []
-        for i in range(len(dimensions)):
+        for i in range(len(dimensions) - 1):
             layer.insert(0, nn.Upsample(size=(int(dimensions[i])), mode='bilinear', align_corners=False) )
             
         return nn.ModuleList(layer)
@@ -72,30 +83,41 @@ class FPN(nn.Module):
     def forward(self, x):
         p_results = []
         
-        # Leveling Convolution
-        x_merged = self.lvl_conv(x[0])
+        # There is no fusion on 1st layer
+        x_lateral = self.conv1[0](x[0])
+        x_out = self.conv2[0](x_lateral)
+    
+        p_results.append(x_out)
         
-        for i in range(self.n_layers):
-            # 1. Re-size to [N, 256, h_i, w_i]
-            x_lateral = self.conv1[i](x[i+1])
+        for i in range(1, self.n_layers):
+            # 1. Compute top input 
+            x_top = self.upsampler[i-1](x_lateral)
             
-            # 2. Rescale (h_i, w_i)
-            x_top = self.upsampler[i](x_merged)
+            # 2. Retrieve lateral input
+            x_lateral = self.conv1[i](x[i])
             
-            # 3. Append lateral and top connections
+            # 3. Merge lateral and top input
             x_merged = x_lateral + x_top
             
-            # 4. Perform convolution on output
-            out = self.conv2[i](x_merged)
+            # 4. Compute PX output
+            x_out = self.conv2[i](x_merged)
             
-            # 5. Retain Results at each layer
-            p_results.append(out)
-            
+            # 5. Retain results
+            p_results.append(x_out)
+        
+        # 6. Compute P6 & P7
+        p6 = self.p6(x[0])
+        p7 = self.p7(p6)
+        p_results.insert(0, p6)
+        p_results.insert(0, p7)
+        
+        
         # Need to verify that when results are added in array, information of the gradient is still not lost...
-            
-        print(">>> P5:", p_results[0].size())
-        print(">>> P4:", p_results[1].size())
-        print(">>> P3:", p_results[2].size())
+        print(">>> P7:", p_results[0].size())
+        print(">>> P6:", p_results[1].size()) 
+        print(">>> P5:", p_results[2].size())
+        print(">>> P4:", p_results[3].size())
+        print(">>> P3:", p_results[4].size())
         
         return p_results
 
@@ -114,10 +136,7 @@ class RegressionModel(nn.Module):
         self.convgroup = self._make_convgroup(n_layers, in_features, feature_size)
         self.output = nn.Conv2d(feature_size, num_anchors * 4, kernel_size=3, stride=1, padding=1)
         
-        
-        
-        
-        
+
     def _make_convgroup(self, n_layers, in_features, out_features):
         layers = []
         for i in range(n_layers):
@@ -192,6 +211,8 @@ class ResNet(nn.Module):
     def __init__(self, x_dim, layers, block, num_classes):
         super(ResNet, self).__init__()
         
+        self.training = True
+        
         self.in_plane = 64
         
         # Compute H & W at each layer
@@ -209,11 +230,12 @@ class ResNet(nn.Module):
         self.conv_5 = self._make_layers(block, layers[3], 512, stride=2)
         
         # Feature Pyramid Network
-        self.fpn = FPN([64, 128, 256], h_x, 512)
+        self.fpn = FPN([128, 256, 512], h_x[1:])
         
         # Regression Model
         self.regressionModel = RegressionModel(256)
         self.classificationModel = ClassificationModel(256, num_classes=num_classes)
+        self.anchors = RPN()
         
 #         self.avgpool = nn.AvgPool2d(kernel_size=self.conv_5[layers[-1]])
 #         self.fc = nn.Linear(512 * block.expansion, num_classes)
@@ -235,11 +257,11 @@ class ResNet(nn.Module):
         return nn.Sequential(*layers)
         
         
-    def forward(self, x):
+    def forward(self, img_batch):
         
         c_outputs = []
         
-        x = self.conv1(x)
+        x = self.conv1(img_batch)
         x = self.maxpool(x)
         
         # This could be for-loop
@@ -249,7 +271,7 @@ class ResNet(nn.Module):
         x4 = self.conv_5(x3)
         
         # Reverse order for top-to-bottom pass
-        features = self.fpn([x4,x3,x2,x1])
+        features = self.fpn([x4,x3,x2])
         
         # Regression-Box (Different): list of varying sizes
         regression = [self.regressionModel(feature) for feature in features]
@@ -257,6 +279,11 @@ class ResNet(nn.Module):
         # Classification
         classification = [self.classificationModel(feature) for feature in features]
         
+        # Anchors
+        anchors = self.anchors(img_batch)
+        
+        if self.training:
+            return self.focalLoss(classification, regression, anchors, annotations)
         
         return features
     
@@ -264,11 +291,9 @@ class ResNet(nn.Module):
 if __name__ == '__main__':
     print(">>> Start...")
     
-    os.environ["CUDA_VISIBLE_DEVICES"]="2"
-    
-    x = torch.randn((10, 3, 224, 224)).cuda()
+    x = torch.randn((10, 3, 224, 224))
     x_dim = np.array([x.size(2), x.size(3)])
     layers = [2, 3, 6, 4]
     
-    model = ResNet(x_dim, layers, BasicBlock, 1000).cuda()
+    model = ResNet(x_dim, layers, BasicBlock, 1000)
     model.forward(x)

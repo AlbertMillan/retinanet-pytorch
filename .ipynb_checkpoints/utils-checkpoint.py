@@ -6,11 +6,14 @@ import sys
 
 class ConvBlock(nn.Module):
     """ Block consisting of convolutions, batchnorm & relu (if any) layers"""
-    def __init__(self, in_plane, out_plane, kernel, stride=1, pad=1, bias=True, is_relu=True):
+    def __init__(self, in_plane, out_plane, kernel, stride=1, pad=1, bias=True, is_bn=True, is_relu=True):
         super(ConvBlock, self).__init__()
         
         self.conv = nn.Conv2d(in_plane, out_plane, kernel_size=kernel, stride=stride, padding=pad, bias=bias)
-        self.bn = nn.BatchNorm2d(out_plane)
+        
+        self.bn = None
+        if is_bn:
+            self.bn = nn.BatchNorm2d(out_plane)
     
         self.relu = None
         if is_relu:
@@ -19,7 +22,9 @@ class ConvBlock(nn.Module):
         
     def forward(self, x):
         out = self.conv(x)
-        out = self.bn(out)
+        
+        if self.bn:
+            out = self.bn(out)
         
         if self.relu:
             out = self.relu(out)
