@@ -21,18 +21,17 @@ class RPN(nn.Module):
         if scales is None:
             self.scales = np.array([2 ** 0, 2 ** (1.0 / 3.0), 2 ** (2.0 / 3.0)])
             
-#         print(">>> Pyramid Levels:", self.pyramid_levels)
-#         print(">>> Strides:", self.strides)
-#         print(">>> Sizes:", self.sizes)
-#         print(">>> Ratios:", self.ratios)
-#         print(">>> Scales:", self.scales)
+        print(">>> Pyramid Levels:", self.pyramid_levels)
+        print(">>> Strides:", self.strides)
+        print(">>> Sizes:", self.sizes)
+        print(">>> Ratios:", self.ratios)
+        print(">>> Scales:", self.scales)
         
         
     def forward(self, image):
         
         image_shape = np.array(image.shape[2:])
         image_shapes = [(image_shape + 2 ** x -1) // (2 ** x) for x in self.pyramid_levels]
-        print(image_shapes)
         
         # Compute anchors over all pyramid levels
         all_anchors = np.zeros((0, 4)).astype(np.float32)
@@ -41,7 +40,7 @@ class RPN(nn.Module):
         for idx, p in enumerate(self.pyramid_levels):
             anchors = self._generate_anchors(base_size=self.sizes[idx], ratios=self.ratios, scales=self.scales)
             shifted_anchors = self._shift(image_shapes[idx], self.strides[idx], anchors)
-            print(shifted_anchors.shape)
+#             print(shifted_anchors.shape)
             all_anchors = np.append(all_anchors, shifted_anchors, axis=0)
             
         all_anchors = np.expand_dims(all_anchors, axis=0)
@@ -80,7 +79,7 @@ class RPN(nn.Module):
         # transform from (x_ctr, y_ctr, w, h) -> (x1, y1, x2, y2)
         anchors[:, 0::2] -= np.tile(anchors[:, 2] * 0.5, (2, 1)).T
         anchors[:, 1::2] -= np.tile(anchors[:, 3] * 0.5, (2, 1)).T
-        
+
         return anchors
     
     def _shift(self, shape, stride, anchors):
