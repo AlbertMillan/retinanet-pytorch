@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 import sys, os
 
 from data_loader import CocoDataset, Normalizer, Augmenter, Resizer, collater, AspectRatioSampler
-from retinanet import get_model
+from retinanet import resnet18
 
 
 
@@ -27,18 +27,21 @@ if __name__ == '__main__':
     dataset_train = CocoDataset(args.coco_path, args.coco_name,
                                 transform=transforms.Compose([Normalizer(), Augmenter(), Resizer()]))
     
-    sampler = AspectRatioSampler(dataset_train, batch_size=3, drop_last=False)
+    sampler = AspectRatioSampler(dataset_train, batch_size=5, drop_last=False)
     
     data_loader = DataLoader(dataset_train, collate_fn=collater, batch_sampler=sampler)
     
     # Create Model Instance
-    model = get_model(80).cuda()
+    model = resnet18(80).cuda()
     
     for i, batch in enumerate(data_loader):
+        classification_loss, regression_loss = model.forward((batch['img'].cuda(), batch['annot'].cuda()))
+
+        print('Epoch: [{0}][{1}/{2}] \t'
+              'Classification Loss: {3:.3f} \t'
+              'Regression Loss: {4:.3f}'.format(
+                  0, i, len(data_loader), 
+                  classification_loss.item(),
+                  regression_loss.item()))
         
-        loss = model.forward((batch['img'].cuda(), batch['annot'].cuda()))
-        
-        print("ITER COMPLETED")
-        
-        sys.exit()
     sys.exit()

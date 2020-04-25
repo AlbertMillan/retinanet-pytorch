@@ -82,20 +82,20 @@ class FPN(nn.Module):
             x_out = self.conv2[i](x_merged)
             
             # 5. Retain results
-            p_results.append(x_out)
+            p_results.insert(0, x_out)
         
         # 6. Compute P6 & P7
         p6 = self.p6(x[0])
         p7 = self.p7(p6)
-        p_results.insert(0, p6)
-        p_results.insert(0, p7)
+        p_results.append(p6)
+        p_results.append(p7)
         
         
         # Need to verify that when results are added in array, information of the gradient is still not lost...
-        print(">>> P7:", p_results[0].size())
-        print(">>> P6:", p_results[1].size()) 
-        print(">>> P5:", p_results[2].size())
-        print(">>> P4:", p_results[3].size())
-        print(">>> P3:", p_results[4].size())
+#         print(">>> P7:", p_results[0].size())
+#         print(">>> P6:", p_results[1].size()) 
+#         print(">>> P5:", p_results[2].size())
+#         print(">>> P4:", p_results[3].size())
+#         print(">>> P3:", p_results[4].size())
         
         return p_results

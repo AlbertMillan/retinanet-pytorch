@@ -8,6 +8,13 @@ from losses import FocalLoss
 
 import sys, os
 
+model_urls = {
+    'resnet18': 'https://download.pytorch.org/models/resnet18-5c106cde.pth',
+    'resnet34': 'https://download.pytorch.org/models/resnet34-333f7ec4.pth',
+    'resnet50': 'https://download.pytorch.org/models/resnet50-19c8e357.pth',
+    'resnet101': 'https://download.pytorch.org/models/resnet101-5d3b4d8f.pth',
+    'resnet152': 'https://download.pytorch.org/models/resnet152-b121ed2d.pth',
+}
 
 def layers_dim(h_x, w_x, factor, n_layers):
     h = []
@@ -47,6 +54,11 @@ class RegressionModel(nn.Module):
     def forward(self, x):
         out = self.convgroup(x)
         out = self.output(out)
+        
+        # out is B x C x W x H, with C = 4*num_anchors
+        out = out.permute(0, 2, 3, 1)
+        
+        out = out.contiguous().view(out.shape[0], -1, 4)
         
         return out
         
@@ -137,9 +149,6 @@ class ResNet(nn.Module):
         # Focal Loss
         self.focalLoss = FocalLoss()
         
-#         self.avgpool = nn.AvgPool2d(kernel_size=self.conv_5[layers[-1]])
-#         self.fc = nn.Linear(512 * block.expansion, num_classes)
-        
         
     def _make_layers(self, block, n_layers, out_plane, stride=1):
         
@@ -175,22 +184,54 @@ class ResNet(nn.Module):
         features = self.fpn([x4,x3,x2])
         
         # Regression-Box (Different): list of varying sizes
-        regression = [self.regressionModel(feature) for feature in features]
-        
+        regression = torch.cat([self.regressionModel(feature) for feature in features], dim=1)
+
         # Classification
-        classification = [self.classificationModel(feature) for feature in features]
+        classification = torch.cat([self.classificationModel(feature) for feature in features], dim=1)
         
         # Anchors
         anchors = self.anchors(img_batch)
         
-#         if self.training:                                             #annotations
-#             return self.focalLoss(classification, regression, anchors, None)
+        if self.training:
+            return self.focalLoss(classification, regression, anchors, annotations)
         
-        return features
+        return None
     
-def get_model(num_classes, pretrained=False, **kwargs):
+# ==================== LOAD MODEL ======================
+    
+def resnet18(num_classes, pretrained=False, **kwargs):
     """ Constructs ResNet Model """
-    model = ResNet([2, 3, 6, 4], BasicBlock, num_classes)
+    model = ResNet([2, 2, 2, 2], BasicBlock, num_classes)
+    if pretrained:
+        model.load_state_dict(model_zoo.load_url(model_urls['resnet18'], model_dir='models'), strict=False)
+    return model
+
+def resnet34(num_classes, pretrained=False, **kwargs):
+    """ Constructs ResNet Model """
+    model = ResNet([3, 4, 6, 3], BasicBlock, num_classes)
+    if pretrained:
+        model.load_state_dict(model_zoo.load_url(model_urls['resnet34'], model_dir='models'), strict=False)
+    return model
+
+def resnet50(num_classes, pretrained=False, **kwargs):
+    """ Constructs ResNet Model """
+    model = ResNet([3, 4, 6, 3], Bottleneck, num_classes)
+    if pretrained:
+        model.load_state_dict(model_zoo.load_url(model_urls['resnet50'], model_dir='models'), strict=False)
+    return model
+
+def resnet101(num_classes, pretrained=False, **kwargs):
+    """ Constructs ResNet Model """
+    model = ResNet([3, 4, 23, 3], Bottleneck, num_classes)
+    if pretrained:
+        model.load_state_dict(model_zoo.load_url(model_urls['resnet101'], model_dir='models'), strict=False)
+    return model
+
+def resnet152(num_classes, pretrained=False, **kwargs):
+    """ Constructs ResNet Model """
+    model = ResNet([3, 8, 36, 3], Bottleneck, num_classes)
+    if pretrained:
+        model.load_state_dict(model_zoo.load_url(model_urls['resnet152'], model_dir='models'), strict=False)
     return model
     
     
@@ -204,5 +245,5 @@ if __name__ == '__main__':
     x_dim = np.array([x.size(2), x.size(3)])
     layers = [2, 3, 6, 4]
     
-    model = ResNet(x_dim, layers, BasicBlock, 80).cuda()
-    model.forward(x)
+    model = ResNet(layers, BasicBlock, 80).cuda()
+    model.forward((x, None))
