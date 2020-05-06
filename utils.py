@@ -72,22 +72,15 @@ class Bottleneck(nn.Module):
         
     def forward(self, x):
         residual = x
-        
-#         print(">>> Forward:", x.size())
-        
+
         out = self.conv1(x)
         out = self.conv2(out)
         out = self.conv3(out)
         
         if self.downsample:
-#             print(x.size())
             residual = self.downsample(x)
-#             print(out.size())
-#             print(residual.size())
             
         out += residual
         out = F.relu(out)
         
         return out
-    
-    

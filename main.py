@@ -1,13 +1,31 @@
 import argparse
 
 import torch
+import torch.optim as optim
 from torchvision import transforms
 from torch.utils.data import DataLoader
-import sys, os
+import sys, os, time
 
 from data_loader import CocoDataset, Normalizer, Augmenter, Resizer, collater, AspectRatioSampler
 from retinanet import resnet18
 
+
+class AverageMeter():
+    
+    def __init__(self):
+        self.reset()
+        
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
 
 
 if __name__ == '__main__':
@@ -34,14 +52,49 @@ if __name__ == '__main__':
     # Create Model Instance
     model = resnet18(80).cuda()
     
-    for i, batch in enumerate(data_loader):
-        classification_loss, regression_loss = model.forward((batch['img'].cuda(), batch['annot'].cuda()))
+    
+    
+    for i in range(20):
+    
+        optimizer = optim.Adam(model.parameters(), lr=1e-5)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3, verbose=True)
+        
+        cls_loss = AverageMeter()
+        rgs_loss = AverageMeter()
+        total_loss = AverageMeter()
+        batch_time = AverageMeter()
+        
+        end = time.time()
 
-        print('Epoch: [{0}][{1}/{2}] \t'
-              'Classification Loss: {3:.3f} \t'
-              'Regression Loss: {4:.3f}'.format(
-                  0, i, len(data_loader), 
-                  classification_loss.item(),
-                  regression_loss.item()))
+        for j, batch in enumerate(data_loader):
+            optimizer.zero_grad()
+            classification_loss, regression_loss = model.forward((batch['img'].cuda(), batch['annot'].cuda()))
+            loss = classification_loss + regression_loss
+
+            cls_loss.update(classification_loss.item())
+            rgs_loss.update(regression_loss.item())
+            total_loss.update(loss.item())
+            
+            loss.backward()
+
+            optimizer.step()
+            
+            batch_time.update(time.time() - end)
+            end = time.time()
+
+            print('Epoch: [{0}][{1}/{2}] | '
+                  'Time: {batch_time.val:.3f} ({batch_time.avg:.3f}) | '
+                  'CLS Loss: {cls.val:.3f} ({cls.avg:.3f}) | '
+                  'RGS Loss: {rgs.val:.3f} ({rgs.avg:.3f}) | '
+                  'Running Loss: {total_ls.val:.3f} ({total_ls.avg:.3f})'
+                  .format(
+                      i, j, len(data_loader),
+                      batch_time = batch_time,
+                      cls=cls_loss,
+                      rgs=rgs_loss,
+                      total_ls=total_loss))
+            
+            del classification_loss
+            del regression_loss
         
     sys.exit()

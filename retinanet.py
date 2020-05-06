@@ -6,6 +6,8 @@ from fpn import FPN
 from anchors import RPN
 from losses import FocalLoss
 
+import math
+
 import sys, os
 
 model_urls = {
@@ -65,7 +67,7 @@ class RegressionModel(nn.Module):
         
 
 class ClassificationModel(nn.Module):
-    
+    """ Uses sigmoid, but could be extended to CE. """
     def __init__(self, in_plane, n_layers=4, num_anchors=9, num_classes=80, prior=0.01, feature_size=256):
         super(ClassificationModel, self).__init__()
         
@@ -150,6 +152,49 @@ class ResNet(nn.Module):
         self.focalLoss = FocalLoss()
         
         
+        # Utils Function
+        self.regressBoxes = BBoxTransform()
+        self.clipBoxes = ClipBoxes()
+        
+        self._init_weights()
+        
+    
+    def _init_weights(self):
+        conv_count = 0
+        bn_count = 0
+        for module in self.modules():
+            if isinstance(module, nn.Conv2d):
+                # print(module)
+                n = module.kernel_size[0] * module.kernel_size[1] * module.out_channels
+                module.weight.data.normal_(0, math.sqrt(2. / n))
+                conv_count += 1
+            elif isinstance(module, nn.BatchNorm2d):
+                # print(module)
+                module.weight.data.fill_(1)
+                module.bias.data.zero_()
+                bn_count += 1
+                
+        prior = 0.01
+        
+        self.classificationModel.output.weight.data.fill_(0)
+        self.classificationModel.output.bias.data.fill_(-np.log( (1-prior) / prior) )
+        
+        self.regressionModel.output.weight.data.fill_(0)
+        self.regressionModel.output.bias.data.fill_(0)
+        
+        self.freeze_bn()
+                
+        print("Initialized Conv Layers:",conv_count)
+        print("Initialized BatchNorm Layers:",bn_count)
+        
+    
+    def freeze_bn(self):
+        ''' Freeze BatchNorm Layers '''
+        for module in self.modules():
+            if isinstance(module, nn.BatchNorm2d):
+                for param in module.parameters():
+                    param.requires_grad = False
+        
     def _make_layers(self, block, n_layers, out_plane, stride=1):
         
         downsample = None
@@ -194,6 +239,8 @@ class ResNet(nn.Module):
         
         if self.training:
             return self.focalLoss(classification, regression, anchors, annotations)
+        
+        
         
         return None
     
@@ -243,7 +290,7 @@ if __name__ == '__main__':
     
     x = torch.randn((10, 3, 224, 224)).cuda()
     x_dim = np.array([x.size(2), x.size(3)])
-    layers = [2, 3, 6, 4]
+    layers = [3, 4, 6, 3]
     
-    model = ResNet(layers, BasicBlock, 80).cuda()
+    model = ResNet(layers, Bottleneck, 80).cuda()
     model.forward((x, None))
