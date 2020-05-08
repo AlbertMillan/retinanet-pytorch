@@ -1,9 +1,12 @@
 import torch.nn as nn
 import torch
+# from torchvision.ops import nms
 import numpy as np
+
 from utils import ConvBlock, BasicBlock, Bottleneck
+from bbox_utils import BBoxTransform, ClipBoxes
 from fpn import FPN
-from anchors import RPN
+from anchors import Anchors, RPN
 from losses import FocalLoss
 
 import math
@@ -139,7 +142,7 @@ class ResNet(nn.Module):
         self.conv_5 = self._make_layers(block, layers[3], 512, stride=2)
         
         # Feature Pyramid Network
-        self.fpn = FPN([128, 256, 512])
+        self.fpn = FPN([128 * block.expansion, 256 * block.expansion, 512 * block.expansion])
         
         # Regression Model
         self.regressionModel = RegressionModel(256)
@@ -147,6 +150,7 @@ class ResNet(nn.Module):
         
         # Anchors
         self.anchors = RPN()
+#         self.anchors = Anchors()
         
         # Focal Loss
         self.focalLoss = FocalLoss()
@@ -215,6 +219,9 @@ class ResNet(nn.Module):
         
         if self.training:
             img_batch, annotations = inputs
+        else:
+            img_batch, annotations = inputs
+            
         
         x = self.conv1(img_batch)
         x = self.maxpool(x)
@@ -227,10 +234,11 @@ class ResNet(nn.Module):
         
         # Reverse order for top-to-bottom pass
         features = self.fpn([x4,x3,x2])
+#         print(features.size())
         
         # Regression-Box (Different): list of varying sizes
         regression = torch.cat([self.regressionModel(feature) for feature in features], dim=1)
-
+        
         # Classification
         classification = torch.cat([self.classificationModel(feature) for feature in features], dim=1)
         
@@ -240,9 +248,27 @@ class ResNet(nn.Module):
         if self.training:
             return self.focalLoss(classification, regression, anchors, annotations)
         
-        
-        
-        return None
+#         else:
+#             transformed_anchors = self.regressBoxes(anchors, regression)
+#             transformed_anchors = self.clipBoxes(transformed_anchors, img_batch)
+            
+#             scores = torch.max(classification, dim=2, keepdim=True)[0]
+            
+#             scores_over_thresh = (scores > 0.05)[0, :, 0]
+            
+#             # no boxes to NMS, just return
+#             if scores_over_thresh.sum() == 0:
+#                 return [torch.zeros(0), torch.zeros(0), torch.zeros(0, 4)]
+            
+#             classification = classification[:, scores_over_thresh, :]
+#             transformed_anchors = transformed_anchors[:, scores_over_thresh, :]
+#             scores = scores[:, scores_over_thresh, :]
+
+#             anchors_nms_idx = nms(transformed_anchors[0,:,:], scores[0,:,0], 0.5)
+
+#             nms_scores, nms_class = classification[0, anchors_nms_idx, :].max(dim=1)
+
+#             return [nms_scores, nms_class, transformed_anchors[0, anchors_nms_idx, :]]
     
 # ==================== LOAD MODEL ======================
     
@@ -293,4 +319,6 @@ if __name__ == '__main__':
     layers = [3, 4, 6, 3]
     
     model = ResNet(layers, Bottleneck, 80).cuda()
+    model = torch.nn.DataParallel(model).cuda()
+    
     model.forward((x, None))

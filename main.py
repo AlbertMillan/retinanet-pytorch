@@ -30,7 +30,7 @@ class AverageMeter():
 
 if __name__ == '__main__':
     
-    os.environ["CUDA_VISIBLE_DEVICES"]="2"
+    os.environ["CUDA_VISIBLE_DEVICES"]="1,2"
     
     parser = argparse.ArgumentParser(description='Script for training a RetinaNet network.')
     
@@ -51,8 +51,9 @@ if __name__ == '__main__':
     
     # Create Model Instance
     model = resnet18(80).cuda()
+#     model = torch.nn.DataParallel(model).cuda()
     
-    
+#     model.training = False
     
     for i in range(20):
     
@@ -69,6 +70,7 @@ if __name__ == '__main__':
         for j, batch in enumerate(data_loader):
             optimizer.zero_grad()
             classification_loss, regression_loss = model.forward((batch['img'].cuda(), batch['annot'].cuda()))
+            
             loss = classification_loss + regression_loss
 
             cls_loss.update(classification_loss.item())

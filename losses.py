@@ -58,6 +58,11 @@ class FocalLoss(nn.Module):
     def _compute_cls_loss(self, targets, classification):
         """ 
         Computes Focal Loss as per formula described on the paper.
+        Input:
+            - targets: 
+            - classification:
+        Returns:
+            - cls_loss:
         """
         if torch.cuda.is_available():
             alpha_factor = torch.ones(targets.size()).cuda() * self.alpha
