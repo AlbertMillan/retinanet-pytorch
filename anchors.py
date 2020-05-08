@@ -127,11 +127,11 @@ class RPN(nn.Module):
         if scales is None:
             self.scales = np.array([2 ** 0, 2 ** (1.0 / 3.0), 2 ** (2.0 / 3.0)])
             
-        print(">>> Pyramid Levels:", self.pyramid_levels)
-        print(">>> Strides:", self.strides)
-        print(">>> Sizes:", self.sizes)
-        print(">>> Ratios:", self.ratios)
-        print(">>> Scales:", self.scales)
+#         print(">>> Pyramid Levels:", self.pyramid_levels)
+#         print(">>> Strides:", self.strides)
+#         print(">>> Sizes:", self.sizes)
+#         print(">>> Ratios:", self.ratios)
+#         print(">>> Scales:", self.scales)
         
         
     def forward(self, image):

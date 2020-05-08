@@ -30,7 +30,7 @@ class AverageMeter():
 
 if __name__ == '__main__':
     
-    os.environ["CUDA_VISIBLE_DEVICES"]="1,2"
+    os.environ["CUDA_VISIBLE_DEVICES"]="2,3"
     
     parser = argparse.ArgumentParser(description='Script for training a RetinaNet network.')
     
@@ -39,6 +39,8 @@ if __name__ == '__main__':
     
     parser.add_argument('--depth', help='Resnet depth, must be one of 18, 34, 50, 101, 152', type=int, default=50)
     parser.add_argument('--epochs', help='Number of epochs', type=int, default=100)
+    parser.add_argument('--bag_size', help='Initial bag size (k)', type=int, default=50)
+    
     
     args = parser.parse_args()
     
@@ -54,11 +56,15 @@ if __name__ == '__main__':
 #     model = torch.nn.DataParallel(model).cuda()
     
 #     model.training = False
+
+    model.focalLoss.set_MALnet(args.epochs, k=args.bag_size)
     
-    for i in range(20):
+    for i in range(args.epochs):
     
         optimizer = optim.Adam(model.parameters(), lr=1e-5)
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3, verbose=True)
+        
+        model.focalLoss.update_bag_size(i)
         
         cls_loss = AverageMeter()
         rgs_loss = AverageMeter()
