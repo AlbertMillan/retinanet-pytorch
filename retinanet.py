@@ -11,7 +11,7 @@ from losses import FocalLoss
 
 import math
 
-import sys, os
+import sys, os, time
 
 model_urls = {
     'resnet18': 'https://download.pytorch.org/models/resnet18-5c106cde.pth',
@@ -20,18 +20,6 @@ model_urls = {
     'resnet101': 'https://download.pytorch.org/models/resnet101-5d3b4d8f.pth',
     'resnet152': 'https://download.pytorch.org/models/resnet152-b121ed2d.pth',
 }
-
-def layers_dim(h_x, w_x, factor, n_layers):
-    h = []
-    w = []
-    for i in range(n_layers):
-        h.append(h_x)
-        w.append(w_x)
-        h_x /= float(factor)
-        w_x /= float(factor)
-    return h, w
-
-
     
 class RegressionModel(nn.Module):
     """
@@ -149,12 +137,11 @@ class ResNet(nn.Module):
         self.classificationModel = ClassificationModel(256, num_classes=num_classes)
         
         # Anchors
-        self.anchors = RPN()
-#         self.anchors = Anchors()
+#         self.anchors = RPN()
+        self.anchors = Anchors()
         
         # Focal Loss
         self.focalLoss = FocalLoss()
-        
         
         # Utils Function
         self.regressBoxes = BBoxTransform()
@@ -234,7 +221,6 @@ class ResNet(nn.Module):
         
         # Reverse order for top-to-bottom pass
         features = self.fpn([x4,x3,x2])
-#         print(features.size())
         
         # Regression-Box (Different): list of varying sizes
         regression = torch.cat([self.regressionModel(feature) for feature in features], dim=1)
@@ -312,7 +298,7 @@ def resnet152(num_classes, pretrained=False, **kwargs):
 if __name__ == '__main__':
     print(">>> Start...")
     
-    os.environ["CUDA_VISIBLE_DEVICES"]="2"
+    os.environ["CUDA_VISIBLE_DEVICES"]="5"
     
     x = torch.randn((10, 3, 224, 224)).cuda()
     x_dim = np.array([x.size(2), x.size(3)])

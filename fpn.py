@@ -54,7 +54,8 @@ class FPN(nn.Module):
         """ Creates upsampler modules for each level."""
         layer = []
         for i in range(layers - 1):
-            layer.insert(0, nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False) )
+            layer.insert(0, nn.Upsample(scale_factor=2, mode='nearest') )
+#             layer.insert(0, nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False) )
             
         return nn.ModuleList(layer)
             
@@ -90,8 +91,6 @@ class FPN(nn.Module):
         p_results.append(p6)
         p_results.append(p7)
         
-        
-        # Need to verify that when results are added in array, information of the gradient is still not lost...
 #         print(">>> P7:", p_results[0].size())
 #         print(">>> P6:", p_results[1].size()) 
 #         print(">>> P5:", p_results[2].size())

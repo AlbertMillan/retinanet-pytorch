@@ -198,10 +198,7 @@ class FocalLoss(nn.Module):
             # Computes IoU, each row being a prediction for each annotation [n_pred, n_annotations]
             IoU = calc_iou(anchors[0, :, :], bbox_annotation[:, :4])
                
-            self.malNet = True
-            
             if not self.malNet:
-                
                 # Retrieves annotation that most closely fits IoU for each prediction
                 IoU_max, IoU_argmax = torch.max(IoU, dim=1)
 
@@ -232,7 +229,6 @@ class FocalLoss(nn.Module):
                     
             
             elif self.malNet:
-                
                 n_annotations = bbox_annotation.size(0)
                 lst = np.arange(n_annotations)
                 
