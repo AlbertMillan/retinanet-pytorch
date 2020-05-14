@@ -114,67 +114,83 @@ if __name__ == '__main__':
         if args.mal:
             model.module.focalLoss.set_MALnet(args.epochs, k=args.bag_size)
         print("Loading to multiple GPUs...")
+        
+        
+    cls_loss_hist = []
+    rgs_loss_hist = []
+    loss_hist = []
     
-    for i in range(args.epochs):
     
-#         optimizer = optim.SGD(model.parameters(), momentum=0.9, lr=0.01)
+#     for i in range(args.epochs):
+    
+# #         optimizer = optim.SGD(model.parameters(), momentum=0.9, lr=0.01)
         
-        optimizer = optim.Adam(model.parameters(), lr=1e-5)
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3, verbose=True)
+#         optimizer = optim.Adam(model.parameters(), lr=1e-5)
+#         scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3, verbose=True)
         
-        if args.mal:
-            if parallel:
-                model.module.focalLoss.update_bag_size(i)
-            else:
-                model.focalLoss.update_bag_size(i)
+#         if args.mal:
+#             if parallel:
+#                 model.module.focalLoss.update_bag_size(i)
+#             else:
+#                 model.focalLoss.update_bag_size(i)
         
-        cls_loss = AverageMeter()
-        rgs_loss = AverageMeter()
-        total_loss = AverageMeter()
-        batch_time = AverageMeter()
+#         cls_loss = AverageMeter()
+#         rgs_loss = AverageMeter()
+#         total_loss = AverageMeter()
+#         batch_time = AverageMeter()
         
-        end = time.time()
+#         end = time.time()
 
-        for j, batch in enumerate(data_loader):
-            optimizer.zero_grad()
-            classification_loss, regression_loss = model.forward((batch['img'].cuda(), batch['annot'].cuda()))
-            loss = classification_loss.mean() + regression_loss.mean()
+#         for j, batch in enumerate(data_loader):
+#             optimizer.zero_grad()
+#             classification_loss, regression_loss = model.forward((batch['img'].cuda(), batch['annot'].cuda()))
+#             loss = classification_loss.mean() + regression_loss.mean()
 
-            cls_loss.update(classification_loss.mean().item())
-            rgs_loss.update(regression_loss.mean().item())
-            total_loss.update(loss.item())
+#             cls_loss.update(classification_loss.mean().item())
+#             rgs_loss.update(regression_loss.mean().item())
+#             total_loss.update(loss.item())
             
-            loss.backward()
+#             loss.backward()
 
-            optimizer.step()
+#             optimizer.step()
             
-            batch_time.update(time.time() - end)
-            end = time.time()
+#             batch_time.update(time.time() - end)
+#             end = time.time()
 
-            if (j % args.print_freq) == 0:
-                print('Epoch: [{0}][{1}/{2}] | '
-                      'Time: {batch_time.val:.3f} ({batch_time.avg:.3f}) | '
-                      'CLS Loss: {cls.val:.3f} ({cls.avg:.3f}) | '
-                      'RGS Loss: {rgs.val:.3f} ({rgs.avg:.3f}) | '
-                      'Running Loss: {total_ls.val:.3f} ({total_ls.avg:.3f})'
-                      .format(
-                          i, j, len(data_loader),
-                          batch_time = batch_time,
-                          cls=cls_loss,
-                          rgs=rgs_loss,
-                          total_ls=total_loss))
+#             if (j % args.print_freq) == 0:
+#                 print('Epoch: [{0}][{1}/{2}] | '
+#                       'Time: {batch_time.val:.3f} ({batch_time.avg:.3f}) | '
+#                       'CLS Loss: {cls.val:.3f} ({cls.avg:.3f}) | '
+#                       'RGS Loss: {rgs.val:.3f} ({rgs.avg:.3f}) | '
+#                       'Running Loss: {total_ls.val:.3f} ({total_ls.avg:.3f})'
+#                       .format(
+#                           i, j, len(data_loader),
+#                           batch_time = batch_time,
+#                           cls=cls_loss,
+#                           rgs=rgs_loss,
+#                           total_ls=total_loss))
             
-            del classification_loss
-            del regression_loss
+#             del classification_loss
+#             del regression_loss
         
-        model_dict = None
-        if parallel:
-            model_dict = model.module.state_dict()
-        else:
-            model_dict = model.state_dict()
+#         model_dict = None
+#         if parallel:
+#             model_dict = model.module.state_dict()
+#         else:
+#             model_dict = model.state_dict()
             
-        scheduler.step(total_loss.avg)
+#         cls_loss_hist.append(cls_loss.avg)
+#         rgs_loss_hist.append(rgs_loss.avg)
+#         loss_hist.append(total_loss.avg)
             
-        save_checkpoint(True, i, model_dict, optimizer.state_dict(), loss.item(), args.save_dir)
-        
-    sys.exit()
+#         scheduler.step(total_loss.avg)
+            
+#         save_checkpoint(True, i, model_dict, optimizer.state_dict(), loss.item(), args.save_dir)
+    
+    # Store loss numpy arrays
+    if not os.path.exists('results/'):
+        os.makedirs('results/')
+    np.save('results/cls_loss_hist.np', cls_loss_hist)
+    np.save('results/rgs_loss_hist.np', rgs_loss_hist)
+    np.save('results/loss_hist.np', loss_hist)
+    
