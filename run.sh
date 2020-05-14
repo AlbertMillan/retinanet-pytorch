@@ -1,0 +1,1 @@
+python main.py --batch_size 12 --depth 101 --gpus "0,1,2,3" --mal 1
