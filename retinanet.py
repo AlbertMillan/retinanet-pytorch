@@ -235,6 +235,12 @@ class ResNet(nn.Module):
             return self.focalLoss(classification, regression, anchors, annotations)
         
         else:
+            
+            # Executed during visualization. Returns three arrays, each of size D:
+            #  - scores: array containing the confidence/probability of the predictions
+            #  - labels: array containing integers representing the labels (0-80)
+            #  - bboxes: array of shape [D, 4] containing the bounding box coordinates for each label
+            
             if torch.cuda.is_available():
                 return [
                     torch.cuda.FloatTensor([93.23, 99.99]),
