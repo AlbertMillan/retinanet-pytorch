@@ -234,6 +234,26 @@ class ResNet(nn.Module):
         if self.training:
             return self.focalLoss(classification, regression, anchors, annotations)
         
+        else:
+            if torch.cuda.is_available():
+                return [
+                    torch.cuda.FloatTensor([93.23, 99.99]),
+                    torch.randint(0, 81, (2,), device="cuda:0"),
+                    torch.cuda.FloatTensor([
+                        [50., 50., 200., 200.],
+                        [50., 250., 300., 300.]
+                    ])
+                ]
+            else:
+                return [
+                    torch.FloatTensor([93.23, 99.99]),
+                    torch.randint(0, 81, (2,)),
+                    torch.FloatTensor([
+                        [50., 50., 200., 200.],
+                        [50., 250., 300., 300.]
+                    ])
+                ]
+        
 #         else:
 #             transformed_anchors = self.regressBoxes(anchors, regression)
 #             transformed_anchors = self.clipBoxes(transformed_anchors, img_batch)
@@ -298,13 +318,18 @@ def resnet152(num_classes, pretrained=False, **kwargs):
 if __name__ == '__main__':
     print(">>> Start...")
     
-    os.environ["CUDA_VISIBLE_DEVICES"]="5"
+    os.environ["CUDA_VISIBLE_DEVICES"]="4"
     
     x = torch.randn((10, 3, 224, 224)).cuda()
-    x_dim = np.array([x.size(2), x.size(3)])
+#     x_dim = np.array([x.size(2), x.size(3)])
     layers = [3, 4, 6, 3]
     
     model = ResNet(layers, Bottleneck, 80).cuda()
-    model = torch.nn.DataParallel(model).cuda()
+#     model = torch.nn.DataParallel(model)
+    model.training = False
     
-    model.forward((x, None))
+    # Returns outputs of one item per label.
+    scores, labels, pred_boxs = model.forward((x, None))
+    print("SCORES:", scores)
+    print("LABELS:", labels)
+    print("BBOXES:", pred_boxs)
